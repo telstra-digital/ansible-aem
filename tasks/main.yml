@@ -1,2 +1,22 @@
 ---
-# tasks file for ansible-aem
+- name: Copy packages to target host
+  copy:
+    src={{ local_packages_dir }}/{{ item.name }}-{{ item.version}}.zip
+    dest={{ packages_dir }}/{{ item.name }}-{{ item.version}}.zip
+  with_items: packages
+  tags: install_packages
+
+- name: Install packages
+  aem_package:
+    group={{ item.group }}
+    name={{ item.name }}
+    version={{ item.version }}
+    state=installed
+    username={{ deploy_user }}
+    password={{ deploy_password }}
+    host=localhost
+    port={{ aem_port }}
+    path={{ packages_dir }}
+    force=true
+  with_items: packages
+  tags: install_packages
