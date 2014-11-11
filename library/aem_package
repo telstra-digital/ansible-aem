@@ -1,0 +1,99 @@
+#!/usr/bin/python
+
+import sys
+
+try:
+    from pyaem import PyAem
+except ImportError:
+    print("failed=True msg='pyaem required for this module'")
+    sys.exit(1)
+
+
+class AEMPackage(object):
+    def __init__(self, module, client):
+        self.module = module
+        self.client = client
+
+    def upload_package(self, group, name, version, path, force=False):
+        """Uploads a package to the server"""
+        if force is True:
+            force = 'true'
+        else:
+            force = 'false'
+
+        return self.client.upload_package(group, name, version, path,
+                                          force=force)
+
+    def install_package(group, name, version):
+        """Installs an already uploaded package"""
+        return client.install_package(group, name, version)
+
+
+def main():
+    argument_spec = dict(
+        host=dict(type='str', default='localhost'),
+        port=dict(type='int', default=4502),
+        username=dict(type='str', required=True),
+        password=dict(type='str', required=True),
+        group=dict(type='str', required=True),
+        name=dict(type='str', required=True),
+        version=dict(type='str', required=True),
+        state=dict(default='installed', choices=['installed', 'present',
+                                                 'absent']),
+        path=dict(type='str', required=True),
+        force=dict(type='bool', default=False),
+    )
+
+    module = AnsibleModule(argument_spec=argument_spec)
+
+    host = module.params['host']
+    port = module.params['port']
+    username = module.params['username']
+    password = module.params['password']
+    group = module.params['group']
+    name = module.params['name']
+    version = module.params['version']
+    state = module.params['state']
+    path = module.params['path']
+    force = module.params['force']
+
+    client = PyAem(username, password, host, port)
+
+    if state == 'absent':
+        module.fail_json(msg='absent not implemented')
+
+    # Handle package upload for both installed and present state
+    if state in ['installed', 'present']:
+        result = client.is_package_uploaded(group, name, version)
+        if result.is_success() and state == 'present' and force is not True:
+            module.exit_json(changed=False)
+        else:
+            if force is True:
+                result = client.upload_package(group, name, version, path,
+                                               force='true')
+            else:
+                result = client.upload_package(group, name, version, path)
+
+            if result.is_success() and state == 'present':
+                module.exit_json(changed=True, msg=result.message)
+
+            if result.is_failure():
+                module.fail_json(msg=result.message)
+
+    # NOTE: Package upload already handled by previous logic
+    if state == 'installed':
+        result = client.is_package_installed(group, name, version)
+        if result.is_success() and force is not True:
+            # Already installed, nothing to do
+            module.exit_json(changed=False)
+        else:
+            result = client.install_package(group, name, version)
+            if result.is_success():
+                module.exit_json(changed=True, msg=result.message)
+            else:
+                module.fail_json(msg=result.message)
+
+from ansible.module_utils.basic import * # NOQA
+
+if __name__ == '__main__':
+    main()
